@@ -67,6 +67,8 @@ Benefits significantly outweigh costs for this domain.
 <img width="1258" height="672" alt="image" src="https://github.com/user-attachments/assets/d04e0536-e16c-453c-aa33-b3d800b7a605" />
 <img width="906" height="498" alt="image" src="https://github.com/user-attachments/assets/4dfaf8f5-a813-417a-9302-c60e92a41822" />
 
+5. Swagger
+   <img width="1912" height="793" alt="image" src="https://github.com/user-attachments/assets/d14501a4-08aa-491e-8eb0-d018486ee810" />
 
 
 
