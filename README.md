@@ -1,23 +1,22 @@
+
 ## How to Run the Project
 
 Follow these steps after cloning the repository:
 
-```bash
-# 1. Navigate to the project root folder
+1. Navigate to the project root folder
 cd ElevatorControlSystem
 
-# 2. Restore all NuGet packages
+ 2. Restore all NuGet packages
 dotnet restore
 
-# 3. Build the solution (optional but recommended)
+ 3. (Optional) Build the solution
 dotnet build
 
-# 4. Run the Web API + Simulation
+ 4. Run the Web API + Elevator Simulation
 dotnet run --project src/ElevatorControlSystem.Api
 
-
-ElevatorControlSystem
-Complete Design Document
+## ElevatorControlSystem
+## Complete Design Document
 
 Author: Suhail Ahmad Dar
 Date: January 05, 2026
