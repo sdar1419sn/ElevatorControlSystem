@@ -1,4 +1,5 @@
-Note: after clone repo , please run dotnet restore
+Note: For Running project please follow below given steps
+after clone repo , please run dotnet restore
 dotnet build
 dotnet run --project src\ElevatorControlSystem.Api
 
