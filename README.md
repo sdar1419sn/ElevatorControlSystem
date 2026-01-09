@@ -1,3 +1,8 @@
+Note: after clone repo , please run dotnet restore
+dotnet build
+dotnet run --project src\ElevatorControlSystem.Api
+
+
 ElevatorControlSystem
 Complete Design Document
 
