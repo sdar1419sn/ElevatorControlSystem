@@ -19,8 +19,8 @@ Start the development server:npm run dev
 ## How to Run the Project
 Follow these steps after cloning the repository:
 1. Navigate to the project root folder
-```bash
 cd ElevatorControlSystem
+
 ## How to Run the Project
 
 Follow these steps after cloning the repository:
