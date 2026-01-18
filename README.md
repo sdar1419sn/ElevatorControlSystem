@@ -1,4 +1,26 @@
+# What's New / Major Improvements
 
+- **Passenger Flow** — Reliable pickup/dropoff logic (passengers enter on arrival, count increases; drop off at destinations, count decreases)  
+- **Logging** — Clean, timestamped, narrative-style logs (e.g., "2 passenger(s) entered → going to 7,9") with explanation for empty movement  
+- **Simulation** — Faster demo timing (2s per floor move, 2s doors open, 3s tick) + safe destination ranges (no invalid floors like 11/0)  
+- **UI** — Modern React + TypeScript dashboard with vertical elevator shafts, animated car movement, passenger icons, direction arrows  
+- **Code Quality** — Better direction switching, error handling, focused unit tests covering assignment, dropoff, status, reset, etc.
+
+## UI Screen Shot
+  <img width="663" height="806" alt="image" src="https://github.com/user-attachments/assets/8b578e12-8950-4956-8590-9b9522275487" />
+
+ ## How to Run the UI (React Dashboard)
+
+Open Command Prompt (cmd) and navigate to the frontend folder:Bashcd C:\ElevatorControlSystem\src\ElevatorControlSystem.Frontend
+Install dependencies (only needed the first time or if you changed package.json)
+Start the development server:npm run dev
+
+
+## How to Run the Project
+Follow these steps after cloning the repository:
+1. Navigate to the project root folder
+```bash
+cd ElevatorControlSystem
 ## How to Run the Project
 
 Follow these steps after cloning the repository:
