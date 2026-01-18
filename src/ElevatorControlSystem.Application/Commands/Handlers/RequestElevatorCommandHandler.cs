@@ -5,7 +5,7 @@ using MediatR;
 
 namespace ElevatorControlSystem.Application.Commands.Handlers;
 
-public class RequestElevatorCommandHandler : IRequestHandler<RequestElevatorCommand>
+public class RequestElevatorCommandHandler : IRequestHandler<RequestElevatorCommand> 
 {
     private readonly IElevatorRepository _elevatorRepository;
     private readonly IFloorRequestRepository _floorRequestRepository;
@@ -18,7 +18,7 @@ public class RequestElevatorCommandHandler : IRequestHandler<RequestElevatorComm
 
     public async Task Handle(RequestElevatorCommand request, CancellationToken cancellationToken)
     {
-        // Simple optimization: Find nearest elevator in suitable direction or idle
+        // Simple optimization: Find nearest elevator in suitable direction or idle 
         var elevators = await _elevatorRepository.GetAllAsync();
         var suitableElevator = elevators
             .OrderBy(e => Math.Abs(e.CurrentFloor - request.Floor))

@@ -8,4 +8,5 @@ public class ElevatorStatusDto
     public int CurrentFloor { get; set; }
     public Direction Direction { get; set; }
     public List<int> Destinations { get; set; } = new();
+    public List<int> Passengers { get; set; } = new();  // Send passenger destinations
 }

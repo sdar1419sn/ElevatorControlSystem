@@ -1,8 +1,13 @@
 ﻿using ElevatorControlSystem.Domain.Entities;
 using ElevatorControlSystem.Domain.Enums;
 using ElevatorControlSystem.Domain.Repositories;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ElevatorControlSystem.Infrastructure;
 
@@ -18,94 +23,182 @@ public class ElevatorSimulationService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        Log("Elevator simulation started → 10 floors, 4 elevators. Generating random hall calls...");
+
         while (!stoppingToken.IsCancellationRequested)
         {
             using var scope = _serviceProvider.CreateScope();
             var elevatorRepo = scope.ServiceProvider.GetRequiredService<IElevatorRepository>();
             var requestRepo = scope.ServiceProvider.GetRequiredService<IFloorRequestRepository>();
 
-            // Generate random request every 5-15 seconds
-            if (_random.Next(0, 3) == 0)
-            {
-                var floor = _random.Next(1, 11);
-                var direction = _random.Next(0, 2) == 0 ? Direction.Up : Direction.Down;
-                var request = new FloorRequest { Floor = floor, Direction = direction };
-                await requestRepo.AddAsync(request);
-                Console.WriteLine($"{direction} request on floor {floor} received (simulated)");
-            }
-
-            // Process elevators
             var elevators = await elevatorRepo.GetAllAsync();
             var pendingRequests = await requestRepo.GetPendingAsync();
 
-            foreach (var elevator in elevators)
+            // Generate new hall call (active for demo)
+            if (_random.NextDouble() < 0.4)
             {
-                await ProcessElevator(elevator, pendingRequests, elevatorRepo, requestRepo);
+                int floor = _random.Next(1, 11);
+                Direction dir = _random.Next(0, 2) == 0 ? Direction.Up : Direction.Down;
+                var request = new FloorRequest { Floor = floor, Direction = dir };
+                await requestRepo.AddAsync(request);
+
+                Log($"New hall call: {dir} at floor {floor}");
             }
 
-            // Log positions
-            LogElevatorPositions(elevators);
+            // Process each elevator
+            foreach (var elevator in elevators.OrderBy(e => e.Id))
+            {
+                await ProcessElevator(elevator, await requestRepo.GetPendingAsync(), elevatorRepo, requestRepo);
+            }
 
-            await Task.Delay(5000, stoppingToken); // Simulate tick every 5s
+            LogElevatorStatus(elevators);
+
+            await Task.Delay(3000, stoppingToken);
         }
     }
 
-    private async Task ProcessElevator(Elevator elevator, List<FloorRequest> pendingRequests, IElevatorRepository elevatorRepo, IFloorRequestRepository requestRepo)
+    private async Task ProcessElevator(Elevator elevator, List<FloorRequest> pendingRequests,
+        IElevatorRepository elevatorRepo, IFloorRequestRepository requestRepo)
     {
+        // Assign idle elevator to nearest pending request
         if (elevator.Direction == Direction.Idle && pendingRequests.Any())
         {
-            // Assign nearest request
-            var nearestRequest = pendingRequests.OrderBy(r => Math.Abs(r.Floor - elevator.CurrentFloor)).First();
-            elevator.Direction = nearestRequest.Floor > elevator.CurrentFloor ? Direction.Up : Direction.Down;
-            elevator.Destinations.Add(nearestRequest.Floor);
-            await requestRepo.RemoveAsync(nearestRequest);
+            var nearest = pendingRequests
+                .OrderBy(r => Math.Abs(r.Floor - elevator.CurrentFloor))
+                .ThenBy(r => r.Direction == elevator.Direction ? 0 : 1)
+                .First();
+
+            elevator.Direction = nearest.Floor > elevator.CurrentFloor ? Direction.Up : Direction.Down;
+            elevator.Destinations.Add(nearest.Floor);
+
+            await requestRepo.RemoveAsync(nearest);
             await elevatorRepo.UpdateAsync(elevator);
+
+            Log($"Elevator {elevator.Id} accepted {nearest.Direction} call at floor {nearest.Floor} → heading {elevator.Direction}");
+            return;
         }
 
+        // Process movement or arrival
         if (elevator.Destinations.Any())
         {
-            var nextDestination = elevator.Direction == Direction.Up
-                ? elevator.Destinations.Where(d => d > elevator.CurrentFloor).MinBy(d => d)
-                : elevator.Destinations.Where(d => d < elevator.CurrentFloor).MinBy(d => elevator.CurrentFloor - d);
+            int? nextFloor = elevator.Direction == Direction.Up
+                ? elevator.Destinations.Where(d => d >= elevator.CurrentFloor).DefaultIfEmpty().Min()
+                : elevator.Destinations.Where(d => d <= elevator.CurrentFloor).DefaultIfEmpty().Max();
 
-            if (nextDestination == null)
+            if (!nextFloor.HasValue || nextFloor == elevator.CurrentFloor)
             {
-                // Change direction if no more in current direction
-                elevator.Direction = elevator.Direction == Direction.Up ? Direction.Down : Direction.Up;
-                nextDestination = elevator.Direction == Direction.Up
-                    ? elevator.Destinations.Where(d => d > elevator.CurrentFloor).MinBy(d => d)
-                    : elevator.Destinations.Where(d => d < elevator.CurrentFloor).MinBy(d => elevator.CurrentFloor - d);
-            }
+                // Arrived
+                Log($"Elevator {elevator.Id} arrived at floor {elevator.CurrentFloor} → doors open (2s)");
 
-            if (nextDestination != null)
-            {
-                // Move towards next (simulate 10s per floor)
-                await Task.Delay(10000); // Simulate move time
-                elevator.CurrentFloor += elevator.CurrentFloor < nextDestination ? 1 : -1;
-
-                if (elevator.CurrentFloor == nextDestination)
+                // Drop off
+                int dropped = elevator.Passengers.RemoveAll(p => p == elevator.CurrentFloor);
+                if (dropped > 0)
                 {
-                    // Stop, passengers enter/leave (10s)
-                    await Task.Delay(10000);
-                    elevator.Destinations.Remove(nextDestination);
-                    Console.WriteLine($"Elevator {elevator.Id} stopped on floor {elevator.CurrentFloor} for passengers");
+                    Log($"   → {dropped} passenger(s) disembarked");
+                }
+
+                await Task.Delay(2000);
+
+                // Pickup passengers (only if valid direction range)
+                int minDest = elevator.Direction == Direction.Up ? elevator.CurrentFloor + 1 : 1;
+                int maxDest = elevator.Direction == Direction.Up ? 11 : elevator.CurrentFloor;
+
+                if (minDest < maxDest)
+                {
+                    int entering = _random.Next(1, 4);
+                    var newDestinations = new List<int>();
+
+                    for (int i = 0; i < entering; i++)
+                    {
+                        int dest = _random.Next(minDest, maxDest);
+                        elevator.Passengers.Add(dest);
+                        newDestinations.Add(dest);
+                    }
+
+                    Log($"   → {entering} passenger(s) entered → going to {string.Join(", ", newDestinations)}");
+
+                    elevator.Destinations.AddRange(newDestinations);
+                }
+                else
+                {
+                    Log("   → No valid destinations in current direction (at building edge)");
+                }
+
+                // Remove current floor
+                elevator.Destinations.Remove(elevator.CurrentFloor);
+
+                // Update direction
+                if (elevator.Destinations.Any())
+                {
+                    bool hasMoreInCurrentDir = elevator.Direction == Direction.Up
+                        ? elevator.Destinations.Any(d => d > elevator.CurrentFloor)
+                        : elevator.Destinations.Any(d => d < elevator.CurrentFloor);
+
+                    if (!hasMoreInCurrentDir)
+                    {
+                        elevator.Direction = elevator.Direction == Direction.Up ? Direction.Down : Direction.Up;
+                        Log($"Elevator {elevator.Id} changed direction to {elevator.Direction} (no more stops in previous direction)");
+                    }
+
+                    Log($"Elevator {elevator.Id} doors closed → continuing {elevator.Direction}");
+                }
+                else
+                {
+                    elevator.Direction = Direction.Idle;
+                    Log($"Elevator {elevator.Id} now idle at floor {elevator.CurrentFloor}");
                 }
 
                 await elevatorRepo.UpdateAsync(elevator);
             }
             else
             {
-                elevator.Direction = Direction.Idle;
+                // Move one floor
+                int step = elevator.Direction == Direction.Up ? 1 : -1;
+                elevator.CurrentFloor += step;
+
+                string note = elevator.Passengers.Count == 0 ? " (empty, heading to pick up waiting passengers)" : "";
+                Log($"Elevator {elevator.Id} moving {elevator.Direction} → now at floor {elevator.CurrentFloor}{note}");
+
+                await Task.Delay(2000);
                 await elevatorRepo.UpdateAsync(elevator);
             }
         }
     }
 
-    private void LogElevatorPositions(List<Elevator> elevators)
+    private void Log(string message)
     {
+        var time = DateTime.Now.ToString("HH:mm:ss");
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.Write($"[{time}] ");
+        Console.ResetColor();
+        Console.WriteLine(message);
+    }
+
+    private void LogElevatorStatus(IEnumerable<Elevator> elevators)
+    {
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine($"\n[{DateTime.Now:HH:mm:ss}] Elevator Status ───────────────────────────────────────");
+        Console.ResetColor();
+
         foreach (var e in elevators)
         {
-            Console.WriteLine($"Car {e.Id} is on floor {e.CurrentFloor}");
+            string dir = e.Direction switch
+            {
+                Direction.Up => "↑",
+                Direction.Down => "↓",
+                _ => "–"
+            };
+
+            string status = e.Destinations.Any() ? "Active" : "Idle";
+
+            Console.WriteLine(
+                $"  Car {e.Id,-2}   Floor {e.CurrentFloor,-2}   Dir {dir}   " +
+                $"Passengers {e.Passengers.Count,-2}   Destinations: {string.Join(",", e.Destinations),-15}   Status: {status}"
+            );
         }
+
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine("───────────────────────────────────────────────────────────────\n");
+        Console.ResetColor();
     }
 }

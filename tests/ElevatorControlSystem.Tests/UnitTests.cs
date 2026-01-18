@@ -67,4 +67,39 @@ public class UnitTests
         Assert.Single(result);
         Assert.Equal(3, result[0].CurrentFloor);
     }
+
+    [Fact]
+    public async Task Elevator_DropsOffPassenger_WhenArrivesAtDestination()
+    {
+        // Arrange - setup mocks
+        var elevatorRepoMock = new Mock<IElevatorRepository>();
+        var requestRepoMock = new Mock<IFloorRequestRepository>();
+
+        var elevator = new Elevator
+        {
+            Id = 1,
+            CurrentFloor = 4,
+            Direction = Direction.Up,
+            Destinations = new List<int> { 5 },
+            Passengers = new List<int> { 5 }
+        };
+
+        elevatorRepoMock.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Elevator> { elevator });
+        elevatorRepoMock.Setup(r => r.UpdateAsync(It.IsAny<Elevator>())).Returns(Task.CompletedTask); 
+
+        requestRepoMock.Setup(r => r.GetPendingAsync()).ReturnsAsync(new List<FloorRequest>());
+
+        var service = new ElevatorSimulationService(null!); // Mock DI not needed for this
+
+        // Force currentFloor to 5 for test
+        elevator.CurrentFloor = 5;
+
+        // Call the method that handles arrival
+        await service.ProcessElevator(elevator, new List<FloorRequest>(), elevatorRepoMock.Object, requestRepoMock.Object);
+
+        // Assert
+        Assert.Empty(elevator.Passengers);
+        Assert.Equal(0, elevator.Passengers.Count);
+        Assert.DoesNotContain(5, elevator.Destinations);
+    }
 }

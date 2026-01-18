@@ -1,6 +1,10 @@
 ﻿using ElevatorControlSystem.Application.DTOs;
 using ElevatorControlSystem.Domain.Repositories;
 using MediatR;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ElevatorControlSystem.Application.Queries.Handlers;
 
@@ -21,7 +25,8 @@ public class GetElevatorStatusQueryHandler : IRequestHandler<GetElevatorStatusQu
             Id = e.Id,
             CurrentFloor = e.CurrentFloor,
             Direction = e.Direction,
-            Destinations = e.Destinations
+            Destinations = e.Destinations,
+            Passengers = e.Passengers  
         }).ToList();
     }
 }

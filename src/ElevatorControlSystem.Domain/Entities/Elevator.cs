@@ -8,4 +8,5 @@ public class Elevator
     public int CurrentFloor { get; set; } = 1;
     public Direction Direction { get; set; } = Direction.Idle;
     public List<int> Destinations { get; set; } = new();
+    public List<int> Passengers { get; set; } = new();
 }

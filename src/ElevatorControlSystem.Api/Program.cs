@@ -12,8 +12,12 @@ builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
 builder.Services.AddHostedService<ElevatorSimulationService>();
+builder.Logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
+// or even stricter:
+builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Update", LogLevel.None);
 
 var app = builder.Build();
+app.UseCors(builder => builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 
 //if (app.Environment.IsDevelopment())
 {
