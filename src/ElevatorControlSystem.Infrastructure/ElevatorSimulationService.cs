@@ -34,7 +34,7 @@ public class ElevatorSimulationService : BackgroundService
             var elevators = await elevatorRepo.GetAllAsync();
             var pendingRequests = await requestRepo.GetPendingAsync();
 
-            // Generate new hall call (active for demo)
+            // Generate new hall call
             if (_random.NextDouble() < 0.4)
             {
                 int floor = _random.Next(1, 11);
@@ -45,7 +45,6 @@ public class ElevatorSimulationService : BackgroundService
                 Log($"New hall call: {dir} at floor {floor}");
             }
 
-            // Process each elevator
             foreach (var elevator in elevators.OrderBy(e => e.Id))
             {
                 await ProcessElevator(elevator, await requestRepo.GetPendingAsync(), elevatorRepo, requestRepo);
@@ -87,7 +86,6 @@ public class ElevatorSimulationService : BackgroundService
 
             if (!nextFloor.HasValue || nextFloor == elevator.CurrentFloor)
             {
-                // Arrived
                 Log($"Elevator {elevator.Id} arrived at floor {elevator.CurrentFloor} → doors open (2s)");
 
                 // Drop off
@@ -99,35 +97,38 @@ public class ElevatorSimulationService : BackgroundService
 
                 await Task.Delay(2000);
 
-                // Pickup passengers (only if valid direction range)
-                int minDest = elevator.Direction == Direction.Up ? elevator.CurrentFloor + 1 : 1;
-                int maxDest = elevator.Direction == Direction.Up ? 11 : elevator.CurrentFloor;
-
-                if (minDest < maxDest)
+                // Pickup ONLY if waiting request exists here
+                var waitingHere = pendingRequests.FirstOrDefault(r => r.Floor == elevator.CurrentFloor);
+                if (waitingHere != null)
                 {
                     int entering = _random.Next(1, 4);
                     var newDestinations = new List<int>();
 
-                    for (int i = 0; i < entering; i++)
+                    int minDest = elevator.Direction == Direction.Up ? elevator.CurrentFloor + 1 : 1;
+                    int maxDest = elevator.Direction == Direction.Up ? 11 : elevator.CurrentFloor;
+
+                    if (minDest < maxDest)
                     {
-                        int dest = _random.Next(minDest, maxDest);
-                        elevator.Passengers.Add(dest);
-                        newDestinations.Add(dest);
+                        for (int i = 0; i < entering; i++)
+                        {
+                            int dest = _random.Next(minDest, maxDest);
+                            elevator.Passengers.Add(dest);
+                            newDestinations.Add(dest);
+                        }
+
+                        Log($"   → {entering} passenger(s) entered → going to {string.Join(", ", newDestinations)}");
+                        elevator.Destinations.AddRange(newDestinations);
                     }
 
-                    Log($"   → {entering} passenger(s) entered → going to {string.Join(", ", newDestinations)}");
-
-                    elevator.Destinations.AddRange(newDestinations);
+                    await requestRepo.RemoveAsync(waitingHere);
                 }
                 else
                 {
-                    Log("   → No valid destinations in current direction (at building edge)");
+                    Log("   → No waiting passengers at this floor");
                 }
 
-                // Remove current floor
                 elevator.Destinations.Remove(elevator.CurrentFloor);
 
-                // Update direction
                 if (elevator.Destinations.Any())
                 {
                     bool hasMoreInCurrentDir = elevator.Direction == Direction.Up
@@ -152,7 +153,6 @@ public class ElevatorSimulationService : BackgroundService
             }
             else
             {
-                // Move one floor
                 int step = elevator.Direction == Direction.Up ? 1 : -1;
                 elevator.CurrentFloor += step;
 
@@ -184,7 +184,7 @@ public class ElevatorSimulationService : BackgroundService
         {
             string dir = e.Direction switch
             {
-                Direction.Up => "↑",
+                Direction.Up => "↑"+
                 Direction.Down => "↓",
                 _ => "–"
             };
