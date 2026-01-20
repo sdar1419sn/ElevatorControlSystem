@@ -36,4 +36,10 @@ public class FloorRequestRepository : IFloorRequestRepository
         }
         // If not found, it's already gone — no exception needed
     }
+
+    public async Task UpdateAsync(FloorRequest request)
+    {
+        _context.FloorRequests.Update(request);
+        await _context.SaveChangesAsync();
+    }
 }

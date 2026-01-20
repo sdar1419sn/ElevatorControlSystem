@@ -45,6 +45,7 @@ public class ElevatorSimulationService : BackgroundService
                 Log($"New hall call: {dir} at floor {floor}");
             }
 
+            // Process each elevator
             foreach (var elevator in elevators.OrderBy(e => e.Id))
             {
                 await ProcessElevator(elevator, await requestRepo.GetPendingAsync(), elevatorRepo, requestRepo);
@@ -59,7 +60,7 @@ public class ElevatorSimulationService : BackgroundService
     private async Task ProcessElevator(Elevator elevator, List<FloorRequest> pendingRequests,
         IElevatorRepository elevatorRepo, IFloorRequestRepository requestRepo)
     {
-        // Assign idle elevator to nearest pending request
+        // Assign idle elevator to nearest pending request (do NOT remove request yet)
         if (elevator.Direction == Direction.Idle && pendingRequests.Any())
         {
             var nearest = pendingRequests
@@ -69,9 +70,10 @@ public class ElevatorSimulationService : BackgroundService
 
             elevator.Direction = nearest.Floor > elevator.CurrentFloor ? Direction.Up : Direction.Down;
             elevator.Destinations.Add(nearest.Floor);
+            nearest.AssignedElevatorId = elevator.Id; // Mark as assigned, but keep pending until pickup
 
-            await requestRepo.RemoveAsync(nearest);
             await elevatorRepo.UpdateAsync(elevator);
+            await requestRepo.UpdateAsync(nearest); // Save assignment
 
             Log($"Elevator {elevator.Id} accepted {nearest.Direction} call at floor {nearest.Floor} → heading {elevator.Direction}");
             return;
@@ -88,7 +90,7 @@ public class ElevatorSimulationService : BackgroundService
             {
                 Log($"Elevator {elevator.Id} arrived at floor {elevator.CurrentFloor} → doors open (2s)");
 
-                // Drop off
+                // Drop off passengers
                 int dropped = elevator.Passengers.RemoveAll(p => p == elevator.CurrentFloor);
                 if (dropped > 0)
                 {
@@ -97,8 +99,9 @@ public class ElevatorSimulationService : BackgroundService
 
                 await Task.Delay(2000);
 
-                // Pickup ONLY if waiting request exists here
-                var waitingHere = pendingRequests.FirstOrDefault(r => r.Floor == elevator.CurrentFloor);
+                // Pickup passengers if there is a waiting request here (request still pending)
+                var currentPending = await requestRepo.GetPendingAsync();
+                var waitingHere = currentPending.FirstOrDefault(r => r.Floor == elevator.CurrentFloor && r.AssignedElevatorId == elevator.Id);
                 if (waitingHere != null)
                 {
                     int entering = _random.Next(1, 4);
@@ -120,15 +123,18 @@ public class ElevatorSimulationService : BackgroundService
                         elevator.Destinations.AddRange(newDestinations);
                     }
 
+                    // Now remove the request (after pickup)
                     await requestRepo.RemoveAsync(waitingHere);
                 }
                 else
                 {
-                    Log("   → No waiting passengers at this floor");
+                    Log("   → No waiting passengers assigned to this elevator at this floor");
                 }
 
+                // Remove current floor from destinations
                 elevator.Destinations.Remove(elevator.CurrentFloor);
 
+                // Update direction if needed
                 if (elevator.Destinations.Any())
                 {
                     bool hasMoreInCurrentDir = elevator.Direction == Direction.Up
@@ -153,6 +159,7 @@ public class ElevatorSimulationService : BackgroundService
             }
             else
             {
+                // Move one floor
                 int step = elevator.Direction == Direction.Up ? 1 : -1;
                 elevator.CurrentFloor += step;
 
@@ -184,7 +191,7 @@ public class ElevatorSimulationService : BackgroundService
         {
             string dir = e.Direction switch
             {
-                Direction.Up => "↑"+
+                Direction.Up => "↑",
                 Direction.Down => "↓",
                 _ => "–"
             };
